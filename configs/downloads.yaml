@@ -1,0 +1,37 @@
+version: 1
+
+data:
+  kaggle_mbti:
+    enabled: true
+    source_url: ""
+    local_target_dir: data/raw/kaggle_mbti
+    archive_type: auto
+    filename: ""
+    expected_files: []
+    notes: Fill in an approved URL or copy the dataset manually.
+  pandora:
+    enabled: true
+    source_url: ""
+    local_target_dir: data/raw/pandora
+    archive_type: auto
+    filename: ""
+    expected_files: []
+    notes: Fill in an approved URL or copy the dataset manually.
+
+weights:
+  teacher:
+    enabled: true
+    model_id: Qwen/Qwen2.5-32B-Instruct
+    local_target_dir: weights/teacher
+    revision: main
+    use_hf_snapshot: true
+    allow_patterns: []
+    ignore_patterns: []
+  student:
+    enabled: true
+    model_id: Qwen/Qwen2.5-7B-Instruct
+    local_target_dir: weights/student
+    revision: main
+    use_hf_snapshot: true
+    allow_patterns: []
+    ignore_patterns: []

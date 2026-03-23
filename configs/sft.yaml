@@ -1,0 +1,20 @@
+experiment_name: sft_baseline
+seed: 42
+model:
+  student_model_id: Qwen/Qwen2.5-7B-Instruct
+  tokenizer_id: Qwen/Qwen2.5-7B-Instruct
+  local_weights_dir: weights/student
+
+data:
+  train_path: data/processed/sft_train.jsonl
+  val_path: data/processed/sft_val.jsonl
+  prompt_template: configs/prompts/teacher_ranking_prompt.txt
+
+training:
+  output_dir: outputs/sft_baseline
+  epochs: 1
+  batch_size: 1
+  grad_accum_steps: 8
+  learning_rate: 2.0e-5
+  max_seq_length: 4096
+  use_lora: true

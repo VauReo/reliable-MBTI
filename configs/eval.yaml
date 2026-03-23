@@ -1,0 +1,9 @@
+experiment_name: eval_baseline
+seed: 42
+prediction_source: outputs/sft_baseline/predictions.jsonl
+label_source: data/processed/test.jsonl
+metrics:
+  - binary_macro_f1
+  - multiclass_macro_f1
+  - ndcg_at_3
+output_dir: outputs/eval_baseline

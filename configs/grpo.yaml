@@ -1,0 +1,23 @@
+experiment_name: grpo_baseline
+seed: 42
+model:
+  policy_model_dir: outputs/sft_baseline
+  reference_model_id: Qwen/Qwen2.5-7B-Instruct
+
+data:
+  train_path: data/processed/rl_train.jsonl
+  val_path: data/processed/rl_val.jsonl
+
+reward:
+  ndcg_k: 3
+  use_dimension_similarity: true
+  exact_match_weight: 1.0
+  dimension_similarity_weight: 0.5
+  format_weight: 0.1
+
+training:
+  output_dir: outputs/grpo_baseline
+  batch_size: 1
+  group_size: 4
+  max_steps: 100
+  learning_rate: 1.0e-6

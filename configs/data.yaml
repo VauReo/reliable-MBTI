@@ -1,0 +1,26 @@
+seed: 42
+raw_data_dir: data/raw
+processed_data_dir: data/processed
+splits_dir: data/splits
+
+datasets:
+  kaggle_mbti:
+    enabled: true
+    input_path: data/raw/kaggle_mbti
+    output_name: kaggle_mbti.jsonl
+  pandora:
+    enabled: true
+    input_path: data/raw/pandora
+    output_name: pandora.jsonl
+
+preprocessing:
+  max_posts_per_user: 128
+  max_chars_per_post: 2000
+  remove_direct_mbti_mentions: true
+  create_cleaned_variant: true
+  lowercase: false
+
+splits:
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1

@@ -1,0 +1,11 @@
+You are given a user's social media posts.
+Analyze the writing style, preferences, and behavioral tendencies.
+Return a ranked list of MBTI types.
+
+Required format:
+<think>
+short reasoning trace
+</think>
+<answer>
+[TYPE1, TYPE2, TYPE3]
+</answer>

@@ -1,0 +1,46 @@
+[project]
+name = "reliable-mbti"
+version = "0.1.0"
+description = "Bootstrap scaffold for reproducing ranking-based MBTI personality detection."
+readme = "readme.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pyyaml>=6.0.2",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "scikit-learn>=1.5",
+  "datasets>=3.0.0",
+  "transformers>=4.46.0",
+  "tqdm>=4.66",
+  "huggingface-hub>=0.27.0",
+]
+
+[project.optional-dependencies]
+train = [
+  "torch>=2.4",
+  "accelerate>=1.0.1",
+  "peft>=0.13.0",
+  "trl>=0.12.0",
+]
+dev = [
+  "ipykernel>=6.29",
+  "jupyter>=1.1.1",
+  "pytest>=8.3",
+  "ruff>=0.8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

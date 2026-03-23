@@ -1,0 +1,18 @@
+paper:
+  title: From Classification to Ranking: Enhancing LLM Reasoning Capabilities for MBTI Personality Detection
+  strategy: faithful_open_source_reproduction
+
+models:
+  teacher_model_id: Qwen/Qwen2.5-14B-Instruct
+  student_model_id: Qwen/Qwen2.5-7B-Instruct
+  reasoning_samples_per_user: 2
+
+ranking:
+  candidate_space: 16_mbti_types
+  top_k_for_acceptance: 3
+  dimension_similarity_definition: matching_letters_over_4
+
+notes:
+  - Output format should remain strictly parseable.
+  - Rejection sampling should keep examples where gold appears in top-k.
+  - GRPO reward implementation details are placeholders at bootstrap stage.

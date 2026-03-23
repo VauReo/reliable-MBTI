@@ -5,7 +5,7 @@ model:
   reference_model_id: Qwen/Qwen2.5-7B-Instruct
 
 data:
-  train_path: data/processed/rl_train.jsonl
+  train_path: data/processed/grpo_train.jsonl
   val_path: data/processed/rl_val.jsonl
 
 reward:

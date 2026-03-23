@@ -1,0 +1,42 @@
+# Offline teacher distillation. Requires: uv sync --extra train (torch).
+# Teacher: local_model_dir (e.g. weights/teacher from download_weights).
+
+experiment_name: generate_sft
+seed: 42
+
+# Local teacher snapshot (e.g. Qwen2.5-32B-Instruct) used only for offline distillation.
+teacher:
+  local_model_dir: weights/teacher
+  torch_dtype: bfloat16
+  device_map: auto
+  trust_remote_code: true
+  max_new_tokens: 1024
+
+data:
+  train_split_path: data/splits/kaggle_mbti/train.jsonl
+  prompt_template_path: configs/prompts/teacher_ranking_prompt.txt
+
+generation:
+  # Number of train rows (after optional shuffle) reserved for teacher -> SFT JSONL.
+  # All remaining train rows are written unchanged to grpo_jsonl for RL / GRPO.
+  max_rows_for_sft_pool: 3
+  shuffle_before_split: true
+  # Keep only traces where the gold label appears in the teacher's <answer> list (rejection sampling).
+  require_label_in_ranked_list: true
+  # Gold label must appear within the first K predicted types (K=5 matches a top-5 list).
+  rejection_top_k: 3
+  # Batched teacher forward (left-padded). Increases throughput; also raises peak VRAM during
+  # prefill/generate. On CUDA OOM, the runner falls back to one prompt at a time.
+  batch_size: 1
+  # Optional: tokenizer truncation on the full chat prompt (helps VRAM on very long posts).
+  # max_prompt_tokens: 8192
+
+# SFT rejects (bad parse / failed rejection sampling) are appended to grpo_jsonl.
+outputs:
+  # One JSON object per train row in the SFT pool: gold label, parsed ranks, raw assistant,
+  # reject_reason (missing_fields | generate_failed | parse_failed | rejection_sampling).
+  # Set to null to disable.
+  teacher_attempts_jsonl: outputs/generate_sft/teacher_attempts.jsonl
+  sft_jsonl: data/processed/sft_train.jsonl
+  grpo_jsonl: data/processed/grpo_train.jsonl
+  metadata_json: outputs/generate_sft/metadata.json

@@ -3,7 +3,7 @@ paper:
   strategy: faithful_open_source_reproduction
 
 models:
-  teacher_model_id: Qwen/Qwen2.5-14B-Instruct
+  teacher_model_id: Qwen/Qwen2.5-32B-Instruct
   student_model_id: Qwen/Qwen2.5-7B-Instruct
   reasoning_samples_per_user: 2
 

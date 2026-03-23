@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Ingests raw data and writes processed JSONL plus stratified train/val/test splits
+# under data/splits/<dataset>/ (ratios and random seed from configs/data.yaml).
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 

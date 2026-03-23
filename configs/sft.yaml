@@ -1,3 +1,5 @@
+# Train JSONL is produced by: bash manage/run_generate_sft_data.sh (configs/generate_sft.yaml).
+# Point data.train_path / val_path at the generated files under data/processed/.
 experiment_name: sft_baseline
 seed: 42
 model:

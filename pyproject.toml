@@ -13,6 +13,7 @@ dependencies = [
   "transformers>=4.46.0",
   "tqdm>=4.66",
   "huggingface-hub>=0.27.0",
+  "kagglehub>=0.3.10",
 ]
 
 [project.optional-dependencies]

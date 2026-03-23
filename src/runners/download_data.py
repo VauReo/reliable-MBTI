@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from utils.config import load_yaml_config
-from utils.downloads import infer_filename, materialize_dataset
+from utils.downloads import infer_filename, materialize_dataset, materialize_kagglehub_dataset
 from utils.io import ensure_dir
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -31,18 +31,33 @@ def main() -> None:
             print(f'[download_data] skipping disabled dataset: {name}')
             continue
 
-        url = item.get('source_url', '').strip()
+        source_type = item.get('source_type', 'http')
         target_dir = ROOT_DIR / item['local_target_dir']
         ensure_dir(target_dir)
+        print(f'[download_data] processing {name} (source_type={source_type})')
 
-        if not url:
-            print(f'[download_data] no source_url configured for {name}; target_dir={target_dir}')
-            continue
-
-        filename = infer_filename(url, item.get('filename'))
-        archive_type = item.get('archive_type', 'auto')
-        print(f'[download_data] processing {name}')
-        materialize_dataset(url, target_dir, filename, archive_type, dry_run=args.dry_run)
+        if source_type == 'kagglehub':
+            dataset_handle = item.get('dataset_handle', '').strip()
+            if not dataset_handle:
+                print(f'[download_data] no dataset_handle configured for {name}; target_dir={target_dir}')
+                continue
+            sync_mode = item.get('sync_mode', 'copy')
+            materialize_kagglehub_dataset(
+                dataset_handle=dataset_handle,
+                target_dir=target_dir,
+                sync_mode=sync_mode,
+                dry_run=args.dry_run,
+            )
+        elif source_type == 'http':
+            url = item.get('source_url', '').strip()
+            if not url:
+                print(f'[download_data] no source_url configured for {name}; target_dir={target_dir}')
+                continue
+            filename = infer_filename(url, item.get('filename'))
+            archive_type = item.get('archive_type', 'auto')
+            materialize_dataset(url, target_dir, filename, archive_type, dry_run=args.dry_run)
+        else:
+            raise ValueError(f'Unsupported source_type for {name}: {source_type}')
 
         expected_files = item.get('expected_files', [])
         if expected_files:

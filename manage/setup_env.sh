@@ -10,8 +10,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 uv venv
-# shellcheck disable=SC1091
-source .venv/bin/activate
 uv sync --extra dev --extra train
 
 echo "Environment ready in $ROOT_DIR/.venv"
+echo "Use 'uv run ...' or activate with 'source .venv/bin/activate' if you want an interactive shell."

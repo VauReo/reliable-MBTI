@@ -3,14 +3,15 @@ version: 1
 data:
   kaggle_mbti:
     enabled: true
-    source_url: ""
+    source_type: kagglehub
+    dataset_handle: datasnaek/mbti-type
     local_target_dir: data/raw/kaggle_mbti
-    archive_type: auto
-    filename: ""
+    sync_mode: copy
     expected_files: []
-    notes: Fill in an approved URL or copy the dataset manually.
+    notes: Downloads via kagglehub cache, then copies files into the local target directory.
   pandora:
-    enabled: true
+    enabled: false
+    source_type: http
     source_url: ""
     local_target_dir: data/raw/pandora
     archive_type: auto

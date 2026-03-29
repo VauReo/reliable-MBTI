@@ -1,0 +1,16 @@
+You are given a user's social media posts.
+Analyze the writing style, preferences, and behavioral tendencies.
+Return a ranked list of MBTI types (most likely first).
+
+Required format:
+</think>
+Write a short reasoning trace comparing plausible MBTI types.
+</think>
+<answer>
+[TYPE1, TYPE2, TYPE3, TYPE4, TYPE5]
+</answer>
+
+Use exactly five distinct 4-letter MBTI codes in the list. Base the ranking on evidence from the posts.
+
+User posts:
+{posts}

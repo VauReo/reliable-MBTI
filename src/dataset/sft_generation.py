@@ -60,11 +60,14 @@ def _parse_mbti_bracket_block(block: str) -> list[str]:
 
 
 def parse_ranked_mbti(text: str) -> list[str]:
-    """Extract ordered MBTI types from model output."""
-    m = re.search(r'<answer>\s*(\[[\s\S]*?\])\s*</answer>', text, re.IGNORECASE)
+    """Extract ordered MBTI types from a strict <answer>...</answer> block."""
+    m = re.search(r'<answer>\s*([\s\S]*?)\s*</answer>', text, re.IGNORECASE)
     if not m:
         return []
     block = m.group(1).strip()
+    if not block:
+        return []
+
     lst: Any | None = None
     try:
         lst = ast.literal_eval(block)
@@ -80,7 +83,10 @@ def parse_ranked_mbti(text: str) -> list[str]:
         if out:
             return out
 
-    return _parse_mbti_bracket_block(block)
+    if block.startswith('[') and block.endswith(']'):
+        return _parse_mbti_bracket_block(block)
+
+    return _parse_mbti_bracket_block(f'[{block}]')
 
 
 def label_passes_rejection(

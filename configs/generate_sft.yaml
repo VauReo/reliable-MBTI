@@ -19,7 +19,7 @@ data:
 generation:
   # Number of train rows (after optional shuffle) reserved for teacher -> SFT JSONL.
   # All remaining train rows are written unchanged to grpo_jsonl for RL / GRPO.
-  max_rows_for_sft_pool: 3
+  max_rows_for_sft_pool: 1000
   shuffle_before_split: true
   # Keep only traces where the gold label appears in the teacher's <answer> list (rejection sampling).
   require_label_in_ranked_list: true
@@ -27,7 +27,7 @@ generation:
   rejection_top_k: 3
   # Batched teacher forward (left-padded). Increases throughput; also raises peak VRAM during
   # prefill/generate. On CUDA OOM, the runner falls back to one prompt at a time.
-  batch_size: 1
+  batch_size: 5
   # Optional: tokenizer truncation on the full chat prompt (helps VRAM on very long posts).
   # max_prompt_tokens: 8192
 

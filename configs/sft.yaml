@@ -1,22 +1,68 @@
 # Train JSONL is produced by: bash manage/run_generate_sft_data.sh (configs/generate_sft.yaml).
-# Point data.train_path / val_path at the generated files under data/processed/.
-experiment_name: sft_baseline
+# Each train run writes into outputs/<experiment_dir_name>/<timestamp>/ by default.
+experiment_name: sft_student_lora
 seed: 42
+
 model:
   student_model_id: Qwen/Qwen2.5-7B-Instruct
   tokenizer_id: Qwen/Qwen2.5-7B-Instruct
   local_weights_dir: weights/student
+  torch_dtype: bfloat16
+  trust_remote_code: true
 
 data:
   train_path: data/processed/sft_train.jsonl
-  val_path: data/processed/sft_val.jsonl
-  prompt_template: configs/prompts/teacher_ranking_prompt.txt
+  val_path: data/splits/kaggle_mbti/val.jsonl
+  prompt_template_path: configs/prompts/student_prompt.txt
+  train_max_samples: null
+  val_max_samples: 1024
 
 training:
-  output_dir: outputs/sft_baseline
-  epochs: 1
-  batch_size: 1
-  grad_accum_steps: 8
-  learning_rate: 2.0e-5
+  output_root_dir: outputs
+  experiment_dir_name: sft_student_lora
+  type: eval
+  num_train_epochs: 6
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 1.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.03
+  lr_scheduler_type: constant_with_warmup
   max_seq_length: 4096
-  use_lora: true
+  gradient_checkpointing: true
+  bf16: true
+  fp16: false
+  logging_steps: 10
+  eval_steps: 36
+  save_steps: 36
+  save_total_limit: 2
+  max_steps: -1
+  report_to: none
+  # Leave empty/null with training.type=eval to score the base model without LoRA adapters.
+  resume_from_checkpoint: null
+
+lora:
+  enabled: true
+  r: 128
+  alpha: 256
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  bias: none
+  task_type: CAUSAL_LM
+
+evaluation:
+  top_k: 3
+  batch_size: 4
+  max_new_tokens: 1024
+  max_prompt_tokens: null
+  max_samples: 128
+  shuffle: true
+  save_generations: true
+  save_generation_count: 10

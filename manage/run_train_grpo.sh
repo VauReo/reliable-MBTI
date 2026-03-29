@@ -9,4 +9,4 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
-PYTHONPATH="$ROOT_DIR/src" uv run python -m runners.train_grpo --config configs/grpo.yaml "$@"
+CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-7} PYTHONPATH="$ROOT_DIR/src" uv run python -m runners.train_grpo --config configs/grpo.yaml "$@"

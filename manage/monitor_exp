@@ -9,4 +9,10 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
-CUDA_VISIBLE_DEVICES=7 PYTHONPATH="$ROOT_DIR/src" uv run python -m runners.train_sft --config configs/sft.yaml "$@"
+if [ "$#" -lt 1 ]; then
+  echo "Usage: manage/monitor_exp <relative-exp-path>"
+  echo "Example: manage/monitor_exp outputs/grpo_student_post_sft/20260328_232614"
+  exit 1
+fi
+
+PYTHONPATH="$ROOT_DIR/src" uv run python -m runners.monitor_exp "$1"

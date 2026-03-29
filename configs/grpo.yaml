@@ -1,23 +1,92 @@
-experiment_name: grpo_baseline
+# GRPO aligns the SFT student using labeled MBTI ranking rewards.
+# Point model.policy_init to the best SFT checkpoint or adapter directory.
+experiment_name: grpo_student_post_sft
 seed: 42
+
 model:
-  policy_model_dir: outputs/sft_baseline
+  policy_init: outputs/sft_student_lora/20260325_163044/checkpoint-642
   reference_model_id: Qwen/Qwen2.5-7B-Instruct
+  tokenizer_id: Qwen/Qwen2.5-7B-Instruct
+  local_weights_dir: weights/student
+  torch_dtype: bfloat16
+  trust_remote_code: true
 
 data:
   train_path: data/processed/grpo_train.jsonl
-  val_path: data/processed/rl_val.jsonl
-
-reward:
-  ndcg_k: 3
-  use_dimension_similarity: true
-  exact_match_weight: 1.0
-  dimension_similarity_weight: 0.5
-  format_weight: 0.1
+  val_path: data/splits/kaggle_mbti/val.jsonl
+  prompt_template_path: configs/prompts/student_prompt.txt
+  train_max_samples: null
+  val_max_samples: 1024
 
 training:
-  output_dir: outputs/grpo_baseline
-  batch_size: 1
-  group_size: 4
-  max_steps: 100
-  learning_rate: 1.0e-6
+  output_root_dir: outputs
+  experiment_dir_name: grpo_student_post_sft
+  type: train
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 5.0e-6
+  weight_decay: 0.0
+  warmup_ratio: 0.03
+  lr_scheduler_type: constant_with_warmup
+  max_seq_length: 4096
+  gradient_checkpointing: true
+  bf16: true
+  fp16: false
+  logging_steps: 5
+  eval_steps: 50
+  save_steps: 50
+  save_total_limit: 2
+  max_steps: -1
+  report_to: none
+  resume_from_checkpoint: null
+
+lora:
+  enabled: true
+  r: 128
+  alpha: 256
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  bias: none
+  task_type: CAUSAL_LM
+
+grpo:
+  num_generations: 8
+  max_completion_length: 1024
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 20
+  repetition_penalty: 1.0
+  beta: 0.02
+  num_iterations: 1
+  generation_batch_size: null
+  log_completions: false
+  num_completions_to_print: 2
+
+reward:
+  top_k: 3
+  parse_weight: 0.3
+  format_weight: 0.1
+  top_1_weight: 2.0
+  top_k_weight: 1.0
+  reciprocal_rank_weight: 0.5
+  dimension_similarity_weight: 0.2
+  invalid_answer_penalty: -0.5
+  use_dimension_similarity: true
+
+evaluation:
+  top_k: 3
+  batch_size: 4
+  max_new_tokens: 512
+  max_prompt_tokens: null
+  max_samples: 128
+  shuffle: true
+  save_generations: true
+  save_generation_count: 10

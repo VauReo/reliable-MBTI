@@ -8,4 +8,4 @@
 - Run the real download helpers or place data and checkpoints manually.
 - Update config paths in `configs/*.yaml`.
 - Implement dataset preprocessing in `src/dataset/preprocessing.py`.
-- Test the baseline pipeline with `bash manage/run_prepare_data.sh` and the runner stubs.
+- Run the full baseline pipeline with `bash manage/run_pipeline.sh --config configs/pipeline.yaml`.

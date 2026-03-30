@@ -29,7 +29,7 @@ Requires-Dist: ruff>=0.8.0; extra == "dev"
 
 Scaffold for reproducing the paper `From Classification to Ranking: Enhancing LLM Reasoning Capabilities for MBTI Personality Detection`.
 
-This repository currently provides a careful local project skeleton: UV-based environment setup, configuration templates, shell helpers, Python runners, and starter modules for data preparation, downloads, SFT, GRPO, and evaluation.
+This repository currently provides a careful local project skeleton: UV-based environment setup, configuration templates, shell helpers, Python runners, and starter modules for data preparation, downloads, SFT, GRPO, and evaluation. The evaluation runner now includes a reproducible reliability audit for uncertainty and perturbation stability.
 
 ## Project Goal
 
@@ -116,10 +116,41 @@ Behavior:
 6. Add GRPO and ranking rewards.
 7. Evaluate, compare checkpoints, and run ablations.
 
+## Reliability Audit For Task 4-5
+
+The `eval` runner now supports a simple but fully local reliability workflow for the assignment items:
+
+- uncertainty estimation: normalized entropy, top-1 margin, calibration error (ECE), and bucketed error analysis;
+- stability audit: perturb text with controlled rule-based transformations and measure top-1 flip-rate plus top-k consistency;
+- reproducible artifacts: JSON summaries, JSONL per-example outputs, saved perturbation examples, and plots when `matplotlib` is installed.
+
+Default mode trains a baseline ranker on the train split and evaluates the test split:
+
+```bash
+bash manage/run_prepare_data.sh --config configs/data.yaml
+bash manage/run_eval.sh --config configs/eval.yaml
+```
+
+Important config fields in [`configs/eval.yaml`](/Users/eneminova/reliable-MBTI/configs/eval.yaml):
+
+- `data.train_source` and `data.eval_source`: train/test JSONL paths from preprocessing.
+- `model.source`: `baseline` to fit TF-IDF + multinomial logistic regression, or `predictions` to audit an existing `predictions.jsonl`.
+- `uncertainty.*`: calibration bins and uncertainty bucket count.
+- `stability.*`: perturbation set, evaluated subset size, and top-k definition.
+
+Saved artifacts under `output_dir` include:
+
+- `metrics_summary.json`
+- `uncertainty_metrics.json`
+- `uncertainty_bucket_analysis.jsonl`
+- `per_example_predictions.jsonl`
+- `stability_metrics.json`
+- `stability_by_perturbation.jsonl`
+- `stability_examples.jsonl`
+
 ## Notes
 
 - This is a reproduction scaffold, not a finished implementation.
 - Python entry points live in `src/runners/`.
 - Shell automation lives in `manage/`.
 - Large data, weights, and outputs should stay out of Git.
-

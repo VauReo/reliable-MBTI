@@ -5,6 +5,8 @@ src/dataset/preprocessing.py
 src/dataset/schema.py
 src/dataset/sft_generation.py
 src/dataset/splits.py
+src/evaluation/__init__.py
+src/evaluation/reliability.py
 src/executors/__init__.py
 src/executors/base.py
 src/executors/eval_executor.py
@@ -25,6 +27,7 @@ src/runners/download_data.py
 src/runners/download_weights.py
 src/runners/eval.py
 src/runners/generate_sft_data.py
+src/runners/monitor_exp.py
 src/runners/prepare_data.py
 src/runners/train_grpo.py
 src/runners/train_sft.py

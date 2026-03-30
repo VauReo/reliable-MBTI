@@ -120,6 +120,7 @@ class EvaluationExecutor:
             scorer=scorer,
             uncertainty_cfg=self.config.get("uncertainty", {}),
             stability_cfg=self.config.get("stability", {}),
+            cri_cfg=self.config.get("cri", {}),
         )
 
         print(f"[eval] top_1_accuracy={summary['top_1_accuracy']:.4f}")
@@ -137,3 +138,15 @@ class EvaluationExecutor:
             print(
                 f"[eval] stability skipped: {summary['stability'].get('reason', 'disabled')}"
             )
+        cri = summary.get("cri", {})
+        if cri.get("enabled"):
+            primary_key = str(cri.get("primary_variant", ""))
+            holdout = cri.get("comparison_holdout", {})
+            primary_metrics = holdout.get(primary_key, {}) if isinstance(holdout, dict) else {}
+            auc = float(primary_metrics.get("auc_correctness", 0.0))
+            corr = float(primary_metrics.get("spearman_with_correctness", 0.0))
+            print(f"[eval] cri_primary={primary_key}")
+            print(f"[eval] cri_holdout_auc={auc:.4f}")
+            print(f"[eval] cri_holdout_spearman={corr:.4f}")
+        else:
+            print(f"[eval] cri skipped: {cri.get('reason', 'disabled')}")

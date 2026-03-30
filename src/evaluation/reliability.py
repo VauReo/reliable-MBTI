@@ -11,6 +11,7 @@ from typing import Any, Protocol
 import numpy as np
 
 from dataset.preprocessing import load_jsonl
+from evaluation.cri import compute_cri
 from losses.ranking_reward import MBTI_TYPES, reward_reciprocal_rank, reward_top_k, reward_top_1
 from models.mbti_ranker import MBTIRankerModel
 from utils.io import ensure_dir
@@ -329,12 +330,12 @@ class ReliabilityEvaluator:
         scorer: Scorer | None,
         uncertainty_cfg: dict[str, Any],
         stability_cfg: dict[str, Any],
+        cri_cfg: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if len(dataset.examples) != len(scored_rows):
             raise ValueError('Dataset and scored rows must have the same length.')
 
         per_example = self._build_per_example_records(dataset, scored_rows)
-        self._write_jsonl(self.output_dir / 'per_example_predictions.jsonl', per_example)
 
         if uncertainty_cfg.get('enabled', True):
             uncertainty_metrics = self._compute_uncertainty(per_example, uncertainty_cfg)
@@ -357,6 +358,20 @@ class ReliabilityEvaluator:
                 stability_metrics = self._compute_stability(dataset, per_example, scorer, stability_cfg)
             self._write_json(self.output_dir / 'stability_metrics.json', stability_metrics)
 
+        cri_cfg = cri_cfg or {}
+        cri_enabled = bool(cri_cfg.get('enabled', True))
+        if cri_enabled:
+            per_example, cri_metrics = compute_cri(
+                per_example,
+                stability_metrics=stability_metrics,
+                config=cri_cfg,
+                seed=self.seed,
+            )
+        else:
+            cri_metrics = {'enabled': False, 'reason': 'cri disabled'}
+        self._write_jsonl(self.output_dir / 'per_example_predictions.jsonl', per_example)
+        self._write_json(self.output_dir / 'cri_metrics.json', cri_metrics)
+
         summary = {
             'num_examples': len(per_example),
             'top_1_accuracy': _safe_mean([float(row['top_1_correct']) for row in per_example]),
@@ -365,10 +380,12 @@ class ReliabilityEvaluator:
             'ndcg_at_5': _safe_mean([float(row['ndcg_at_5']) for row in per_example]),
             'uncertainty': uncertainty_metrics,
             'stability': stability_metrics,
+            'cri': cri_metrics,
         }
         self._write_json(self.output_dir / 'metrics_summary.json', summary)
         self._maybe_plot_uncertainty(per_example, uncertainty_metrics)
         self._maybe_plot_stability(stability_metrics)
+        self._maybe_plot_cri(summary.get('cri', {}))
         return summary
 
     def _build_per_example_records(
@@ -462,6 +479,7 @@ class ReliabilityEvaluator:
         perturbation_specs = config.get('perturbations', [])
         perturbation_rows: list[dict[str, Any]] = []
         perturbation_summary: list[dict[str, Any]] = []
+        per_example_stability: dict[str, list[float]] = {}
         save_examples = int(config.get('save_example_count', 30))
 
         for spec in perturbation_specs:
@@ -486,6 +504,7 @@ class ReliabilityEvaluator:
                 top1_same.append(same_top1)
                 topk_same.append(same_topk)
                 rr_delta.append(float(pert_rr - baseline['reciprocal_rank']))
+                per_example_stability.setdefault(example.row_id, []).append((same_top1 + same_topk) / 2.0)
                 if index < save_examples:
                     perturbation_rows.append(
                         {
@@ -515,11 +534,20 @@ class ReliabilityEvaluator:
 
         self._write_jsonl(self.output_dir / 'stability_examples.jsonl', perturbation_rows)
         self._write_jsonl(self.output_dir / 'stability_by_perturbation.jsonl', perturbation_summary)
+        per_example_rows = [
+            {
+                'row_id': row_id,
+                'stability_score': _safe_mean(values),
+            }
+            for row_id, values in per_example_stability.items()
+        ]
+        self._write_jsonl(self.output_dir / 'stability_per_example.jsonl', per_example_rows)
         return {
             'enabled': True,
             'evaluated_examples': len(subset),
             'top_k': top_k,
             'perturbations': perturbation_summary,
+            'per_example': per_example_rows,
         }
 
     def _write_json(self, path: Path, payload: dict[str, Any]) -> None:
@@ -586,4 +614,35 @@ class ReliabilityEvaluator:
         ax.legend()
         fig.tight_layout()
         fig.savefig(self.output_dir / 'stability_audit.png', dpi=160)
+        plt.close(fig)
+
+    def _maybe_plot_cri(self, metrics: dict[str, Any]) -> None:
+        if plt is None or not metrics.get('enabled'):
+            return
+        comparison = metrics.get('comparison_holdout', {})
+        if not isinstance(comparison, dict) or not comparison:
+            return
+        keys = list(comparison.keys())
+        auc_values = [float(comparison[key].get('auc_correctness', 0.0)) for key in keys]
+        corr_values = [
+            float(comparison[key].get('spearman_with_correctness', 0.0)) for key in keys
+        ]
+
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+        pos = np.arange(len(keys))
+
+        axes[0].bar(pos, auc_values, color='#2563eb')
+        axes[0].set_title('CRI Variant AUC (holdout)')
+        axes[0].set_xticks(pos)
+        axes[0].set_xticklabels(keys, rotation=30, ha='right')
+        axes[0].set_ylim(0.0, 1.0)
+
+        axes[1].bar(pos, corr_values, color='#7c3aed')
+        axes[1].set_title('CRI Variant Spearman (holdout)')
+        axes[1].set_xticks(pos)
+        axes[1].set_xticklabels(keys, rotation=30, ha='right')
+        axes[1].set_ylim(-1.0, 1.0)
+
+        fig.tight_layout()
+        fig.savefig(self.output_dir / 'cri_comparison.png', dpi=160)
         plt.close(fig)

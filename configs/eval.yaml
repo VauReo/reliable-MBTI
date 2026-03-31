@@ -38,4 +38,20 @@ stability:
     - name: lexical_substitution
       max_replacements: 12
 
+cri:
+  enabled: true
+  formula_mode: both
+  primary_formula: multiplicative
+  weight_mode: learned
+  fallback_stability: 0.5
+  bucket_count: 5
+  uncertainty_signal:
+    entropy_weight: 0.5
+    inverse_margin_weight: 0.5
+  learning:
+    fit_fraction: 0.5
+    grid_step: 0.05
+  fixed_weights:
+    uncertainty: 0.5
+
 output_dir: outputs/eval_baseline

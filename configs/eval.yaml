@@ -1,9 +1,41 @@
 experiment_name: eval_baseline
 seed: 42
-prediction_source: outputs/sft_baseline/predictions.jsonl
-label_source: data/processed/test.jsonl
-metrics:
-  - binary_macro_f1
-  - multiclass_macro_f1
-  - ndcg_at_3
+
+data:
+  train_source: data/splits/kaggle_mbti/train.jsonl
+  eval_source: data/splits/kaggle_mbti/test.jsonl
+  label_field: label
+  text_field: text
+
+model:
+  source: baseline
+  baseline:
+    vectorizer:
+      max_features: 50000
+      min_df: 2
+      ngram_range: [1, 2]
+    classifier:
+      c_value: 4.0
+      max_iter: 2000
+  # Alternative mode for already-generated predictions:
+  # source: predictions
+  # prediction_source: outputs/sft_baseline/predictions.jsonl
+
+uncertainty:
+  enabled: true
+  calibration_bins: 10
+  uncertainty_buckets: 5
+
+stability:
+  enabled: true
+  subset_size: 256
+  top_k: 3
+  save_example_count: 30
+  perturbations:
+    - name: random_deletion
+      delete_ratio: 0.1
+    - name: sentence_shuffle
+    - name: lexical_substitution
+      max_replacements: 12
+
 output_dir: outputs/eval_baseline

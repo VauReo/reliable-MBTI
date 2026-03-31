@@ -1,57 +1,93 @@
 # reliable-MBTI
 
-This project implements MBTI ranking with reliability auditing.
+Scaffold for reproducing the paper `From Classification to Ranking: Enhancing LLM Reasoning Capabilities for MBTI Personality Detection`.
 
-## Run baseline + reliability audit
+This repository currently provides a careful local project skeleton: UV-based environment setup, configuration templates, shell helpers, Python runners, and starter modules for data preparation, downloads, SFT, GRPO, and evaluation.
 
-```bash
-bash manage/run_pipeline.sh --config configs/pipeline.yaml
+## Project Goal
+
+The planned reproduction pipeline is:
+
+- treat MBTI prediction as ranking over 16 MBTI types,
+- generate teacher reasoning traces for SFT,
+- fine-tune a student model,
+- optimize the ranking behavior with GRPO-style reinforcement learning,
+- compare the ranking pipeline against baseline classifiers.
+
+## Repository Structure
+
+```text
+reliable-MBTI/
+  configs/        YAML templates for data, training, evaluation, and downloads
+  data/           Local datasets and processed artifacts
+  manage/         Shell scripts for local setup and repeatable workflows
+  outputs/        Experiment outputs and run metadata
+  src/            Python package code
+    dataset/      Dataset schemas and preprocessing entry points
+    executors/    Training and evaluation executors
+    losses/       Reward and loss placeholders
+    models/       Model interface stubs
+    runners/      Python entry points called by manage/*.sh
+    utils/        Shared helpers
+  weights/        Local checkpoints, adapters, and tokenizers
 ```
 
-Or run only evaluation:
+## Local Setup With UV
 
 ```bash
-bash manage/run_eval.sh --config configs/eval.yaml
+uv venv
+uv sync --extra dev --extra train
 ```
 
-For the full one-command pipeline, including dataset download, split creation, baseline training, and all reliability metrics:
+If you only need the minimal scaffold dependencies:
 
 ```bash
-bash manage/run_pipeline.sh --config configs/pipeline.yaml
+uv sync
 ```
 
-This single command runs:
-
-- Kaggle dataset download into `data/raw/kaggle_mbti`
-- preprocessing plus stratified `train/val/test` split creation
-- baseline `TF-IDF + multinomial logistic regression` training
-- ranking metrics plus uncertainty and perturbation-stability auditing
-
-There is also a small Transformer baseline with a classification head:
+You can also use the helper script:
 
 ```bash
-bash manage/run_pipeline.sh --config configs/pipeline_transformer.yaml
+bash manage/setup_env.sh
 ```
 
-That pipeline uses [`configs/eval_transformer.yaml`](/Users/eneminova/reliable-MBTI/configs/eval_transformer.yaml) and trains a `distilbert-base-uncased` classifier over the same train/val/test splits before running the same ranking and reliability evaluation.
+All project wrappers in `manage/` use `uv run`, so activation is optional for normal scripted usage.
 
-Important config fields in [`configs/eval.yaml`](/Users/eneminova/reliable-MBTI/configs/eval.yaml):
+## Download Workflow
 
-- `data.train_source` and `data.eval_source`: train/test JSONL paths from preprocessing.
-- `model.source`: `baseline` to fit a local baseline, or `predictions` to audit an existing `predictions.jsonl`.
-- `model.baseline.type`: `tfidf` or `transformer`.
-- `uncertainty.*`: calibration bins and uncertainty bucket count.
-- `stability.*`: perturbation set, evaluated subset size, and top-k definition.
+Edit `configs/downloads.yaml` first. Then use the shell wrappers:
 
-Saved artifacts under `output_dir` include:
+```bash
+bash manage/download_data.sh
+bash manage/download_weights.sh
+```
 
-- `metrics_summary.json`
-- `uncertainty_metrics.json`
-- `uncertainty_bucket_analysis.jsonl`
-- `per_example_predictions.jsonl`
-- `stability_metrics.json`
-- `stability_by_perturbation.jsonl`
-- `stability_examples.jsonl`
+Useful options:
+
+```bash
+bash manage/download_data.sh --dry-run
+bash manage/download_data.sh --items kaggle_mbti
+bash manage/download_weights.sh --dry-run
+bash manage/download_weights.sh --items teacher
+```
+
+Behavior:
+
+- `kaggle_mbti` uses `kagglehub.dataset_download("datasnaek/mbti-type")`.
+- after Kaggle download, the cached files are copied into `data/raw/kaggle_mbti` so the project keeps a stable local dataset layout.
+- other datasets can still use direct `source_url` downloads and archive extraction.
+- `download_weights.sh` downloads model snapshots from Hugging Face using `model_id` and stores them under `weights/`.
+- dry-run mode prints the planned actions without pulling large artifacts.
+
+## Planned Workflow Stages
+
+1. Download or stage raw datasets and model checkpoints.
+2. Prepare a unified MBTI dataset format.
+3. Build baseline classification and ranking pipelines.
+4. Generate SFT traces from a teacher model.
+5. Train the student model with SFT.
+6. Add GRPO and ranking rewards.
+7. Evaluate, compare checkpoints, and run ablations.
 
 ## Notes
 
@@ -59,3 +95,4 @@ Saved artifacts under `output_dir` include:
 - Python entry points live in `src/runners/`.
 - Shell automation lives in `manage/`.
 - Large data, weights, and outputs should stay out of Git.
+

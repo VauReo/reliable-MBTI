@@ -9,11 +9,13 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
+from sklearn.metrics import f1_score
 
 from dataset.preprocessing import load_jsonl
 from evaluation.cri import compute_cri
 from losses.ranking_reward import MBTI_TYPES, reward_reciprocal_rank, reward_top_k, reward_top_1
 from models.mbti_ranker import MBTIRankerModel
+from models.transformer_ranker import TransformerMBTIRanker
 from utils.io import ensure_dir
 
 try:
@@ -154,6 +156,66 @@ class SklearnRankerScorer:
         return outputs
 
 
+class TransformerRankerScorer:
+    def __init__(self, model: TransformerMBTIRanker) -> None:
+        self.model = model
+
+    @classmethod
+    def from_config(
+        cls,
+        train_dataset: EvaluableDataset,
+        config: dict[str, Any],
+        *,
+        val_dataset: EvaluableDataset | None = None,
+    ) -> 'TransformerRankerScorer':
+        transformer_cfg = config.get('transformer', {})
+        model = TransformerMBTIRanker(
+            model_name=str(transformer_cfg.get('model_name', 'distilbert-base-uncased')),
+            max_length=int(transformer_cfg.get('max_length', 256)),
+            learning_rate=float(transformer_cfg.get('learning_rate', 2.0e-5)),
+            weight_decay=float(transformer_cfg.get('weight_decay', 0.01)),
+            train_batch_size=int(transformer_cfg.get('train_batch_size', 8)),
+            eval_batch_size=int(transformer_cfg.get('eval_batch_size', 16)),
+            num_train_epochs=int(transformer_cfg.get('num_train_epochs', 1)),
+            warmup_ratio=float(transformer_cfg.get('warmup_ratio', 0.0)),
+            random_state=int(config.get('seed', 42)),
+            max_train_samples=(
+                int(transformer_cfg['max_train_samples'])
+                if transformer_cfg.get('max_train_samples') is not None
+                else None
+            ),
+            max_eval_samples=(
+                int(transformer_cfg['max_eval_samples'])
+                if transformer_cfg.get('max_eval_samples') is not None
+                else None
+            ),
+        )
+        model.fit(
+            train_dataset.texts(),
+            train_dataset.labels(),
+            val_texts=val_dataset.texts() if val_dataset is not None else None,
+            val_labels=val_dataset.labels() if val_dataset is not None else None,
+        )
+        return cls(model)
+
+    def save(self, path: str | Path) -> Path:
+        return self.model.save(path)
+
+    def score_texts(self, texts: list[str]) -> list[dict[str, Any]]:
+        _, probs = self.model.predict_proba(texts)
+        outputs: list[dict[str, Any]] = []
+        for row in probs:
+            row_probs = np.asarray(row, dtype=float)
+            outputs.append(
+                {
+                    'probabilities': {label: float(score) for label, score in zip(MBTI_TYPES, row_probs, strict=True)},
+                    'scores': {label: float(score) for label, score in zip(MBTI_TYPES, row_probs, strict=True)},
+                    'ranking': _ranking_from_probabilities(row_probs),
+                }
+            )
+        return outputs
+
+
 class JsonPredictionScorer:
     def __init__(self, predictions_by_id: dict[str, dict[str, Any]]) -> None:
         self.predictions_by_id = predictions_by_id
@@ -210,6 +272,14 @@ def _entropy(probabilities: np.ndarray) -> float:
 def _margin(probabilities: np.ndarray) -> float:
     top2 = np.sort(probabilities)[-2:]
     return float(top2[-1] - top2[-2])
+
+
+def _rank_of_label(ranking: list[str], label: str) -> int:
+    label_u = label.strip().upper()
+    try:
+        return ranking.index(label_u) + 1
+    except ValueError:
+        return len(ranking) + 1
 
 
 def _expected_calibration_error(
@@ -378,12 +448,15 @@ class ReliabilityEvaluator:
             'top_3_accuracy': _safe_mean([float(row['top_3_correct']) for row in per_example]),
             'mrr': _safe_mean([float(row['reciprocal_rank']) for row in per_example]),
             'ndcg_at_5': _safe_mean([float(row['ndcg_at_5']) for row in per_example]),
+            'macro_f1': self._compute_macro_f1(per_example),
+            'weighted_f1': self._compute_weighted_f1(per_example),
             'uncertainty': uncertainty_metrics,
             'stability': stability_metrics,
             'cri': cri_metrics,
         }
         self._write_json(self.output_dir / 'metrics_summary.json', summary)
         self._maybe_plot_uncertainty(per_example, uncertainty_metrics)
+        self._maybe_plot_quality_slices(per_example)
         self._maybe_plot_stability(stability_metrics)
         self._maybe_plot_cri(summary.get('cri', {}))
         return summary
@@ -413,6 +486,7 @@ class ReliabilityEvaluator:
                     'top_3_correct': bool(reward_top_k(ranking, example.label, top_k=3)),
                     'reciprocal_rank': float(rr),
                     'ndcg_at_5': float(rr),
+                    'true_label_rank': _rank_of_label(ranking, example.label),
                     'text_length_chars': len(example.text),
                     'text_length_tokens': len(TOKEN_RE.findall(example.text)),
                 }
@@ -560,6 +634,28 @@ class ReliabilityEvaluator:
             for row in rows:
                 handle.write(json.dumps(row, ensure_ascii=False) + '\n')
 
+    def _compute_macro_f1(self, per_example: list[dict[str, Any]]) -> float:
+        if not per_example:
+            return 0.0
+        y_true = [row['label'] for row in per_example]
+        y_pred = [row['prediction'] for row in per_example]
+        return float(f1_score(y_true, y_pred, labels=list(MBTI_TYPES), average='macro', zero_division=0.0))
+
+    def _compute_weighted_f1(self, per_example: list[dict[str, Any]]) -> float:
+        if not per_example:
+            return 0.0
+        y_true = [row['label'] for row in per_example]
+        y_pred = [row['prediction'] for row in per_example]
+        return float(
+            f1_score(
+                y_true,
+                y_pred,
+                labels=list(MBTI_TYPES),
+                average='weighted',
+                zero_division=0.0,
+            )
+        )
+
     def _maybe_plot_uncertainty(
         self,
         per_example: list[dict[str, Any]],
@@ -593,6 +689,163 @@ class ReliabilityEvaluator:
             fig.tight_layout()
             fig.savefig(self.output_dir / 'reliability_diagram.png', dpi=160)
             plt.close(fig)
+
+        correct_margin = [row['margin'] for row in per_example if row['top_1_correct']]
+        incorrect_margin = [row['margin'] for row in per_example if not row['top_1_correct']]
+        if correct_margin and incorrect_margin:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.boxplot([correct_margin, incorrect_margin], labels=['correct', 'incorrect'])
+            ax.set_title('Margin by correctness')
+            ax.set_ylabel('Top-1 minus Top-2 probability')
+            fig.tight_layout()
+            fig.savefig(self.output_dir / 'margin_by_correctness_boxplot.png', dpi=160)
+            plt.close(fig)
+
+        bucket_rows = metrics.get('bucket_analysis', [])
+        if bucket_rows:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            xs = [str(row['bucket']) for row in bucket_rows]
+            acc = [row['accuracy'] for row in bucket_rows]
+            conf = [row['avg_confidence'] for row in bucket_rows]
+            ax.bar(xs, acc, alpha=0.8, label='accuracy')
+            ax.plot(xs, conf, marker='o', color='darkorange', linewidth=2, label='avg confidence')
+            ax.set_title('Accuracy by uncertainty bucket')
+            ax.set_xlabel('Bucket (1 = most uncertain)')
+            ax.set_ylim(0.0, 1.0)
+            ax.legend()
+            fig.tight_layout()
+            fig.savefig(self.output_dir / 'accuracy_by_uncertainty_bucket.png', dpi=160)
+            plt.close(fig)
+
+        non_empty_calibration = [row for row in calibration if row.get('count', 0.0) > 0]
+        if non_empty_calibration:
+            labels = [f"{row['bin_start']:.1f}-{row['bin_end']:.1f}" for row in non_empty_calibration]
+            conf = [row.get('avg_confidence', 0.0) for row in non_empty_calibration]
+            acc = [row.get('avg_accuracy', 0.0) for row in non_empty_calibration]
+            fig, ax = plt.subplots(figsize=(9, 4))
+            x = np.arange(len(labels))
+            ax.bar(x - 0.2, conf, width=0.4, label='confidence')
+            ax.bar(x + 0.2, acc, width=0.4, label='accuracy')
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels, rotation=30, ha='right')
+            ax.set_ylim(0.0, 1.0)
+            ax.set_title('Confidence vs accuracy by calibration bin')
+            ax.legend()
+            fig.tight_layout()
+            fig.savefig(self.output_dir / 'confidence_accuracy_by_bin.png', dpi=160)
+            plt.close(fig)
+
+    def _maybe_plot_quality_slices(self, per_example: list[dict[str, Any]]) -> None:
+        if plt is None or not per_example:
+            return
+        self._plot_text_length_bucket_accuracy(per_example)
+        self._plot_mbti_type_accuracy(per_example)
+        self._plot_confusion_matrix(per_example)
+        self._plot_true_label_rank_distribution(per_example)
+        self._plot_confidence_vs_entropy_scatter(per_example)
+
+    def _plot_text_length_bucket_accuracy(self, per_example: list[dict[str, Any]]) -> None:
+        token_lengths = np.asarray([row['text_length_tokens'] for row in per_example], dtype=float)
+        if len(token_lengths) < 4:
+            return
+        quantiles = np.quantile(token_lengths, [0.0, 0.25, 0.5, 0.75, 1.0])
+        bucket_labels: list[str] = []
+        accuracies: list[float] = []
+        counts: list[int] = []
+        for idx, (start, end) in enumerate(zip(quantiles[:-1], quantiles[1:], strict=True)):
+            if idx == len(quantiles) - 2:
+                rows = [row for row in per_example if start <= row['text_length_tokens'] <= end]
+            else:
+                rows = [row for row in per_example if start <= row['text_length_tokens'] < end]
+            if not rows:
+                continue
+            bucket_labels.append(f'{int(start)}-{int(end)}')
+            accuracies.append(_safe_mean([1.0 if row['top_1_correct'] else 0.0 for row in rows]))
+            counts.append(len(rows))
+        if not bucket_labels:
+            return
+        fig, ax1 = plt.subplots(figsize=(8, 4))
+        positions = np.arange(len(bucket_labels))
+        ax1.bar(positions, accuracies, color='steelblue', alpha=0.85)
+        ax1.set_ylim(0.0, 1.0)
+        ax1.set_ylabel('Top-1 accuracy')
+        ax1.set_xlabel('Text length bucket (tokens)')
+        ax1.set_xticks(positions)
+        ax1.set_xticklabels(bucket_labels)
+        ax2 = ax1.twinx()
+        ax2.plot(positions, counts, color='darkorange', marker='o')
+        ax2.set_ylabel('Examples')
+        ax1.set_title('Accuracy by text length bucket')
+        fig.tight_layout()
+        fig.savefig(self.output_dir / 'accuracy_by_text_length_bucket.png', dpi=160)
+        plt.close(fig)
+
+    def _plot_mbti_type_accuracy(self, per_example: list[dict[str, Any]]) -> None:
+        labels: list[str] = []
+        accuracies: list[float] = []
+        for mbti in MBTI_TYPES:
+            rows = [row for row in per_example if row['label'] == mbti]
+            if not rows:
+                continue
+            labels.append(mbti)
+            accuracies.append(_safe_mean([1.0 if row['top_1_correct'] else 0.0 for row in rows]))
+        if not labels:
+            return
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.bar(labels, accuracies, color='seagreen', alpha=0.85)
+        ax.set_ylim(0.0, 1.0)
+        ax.set_title('Top-1 accuracy by MBTI type')
+        ax.set_ylabel('Accuracy')
+        ax.tick_params(axis='x', rotation=35)
+        fig.tight_layout()
+        fig.savefig(self.output_dir / 'accuracy_by_mbti_type.png', dpi=160)
+        plt.close(fig)
+
+    def _plot_confusion_matrix(self, per_example: list[dict[str, Any]]) -> None:
+        matrix = np.zeros((len(MBTI_TYPES), len(MBTI_TYPES)), dtype=int)
+        index_by_label = {label: idx for idx, label in enumerate(MBTI_TYPES)}
+        for row in per_example:
+            matrix[index_by_label[row['label']], index_by_label[row['prediction']]] += 1
+        fig, ax = plt.subplots(figsize=(9, 8))
+        image = ax.imshow(matrix, cmap='Blues')
+        ax.set_xticks(np.arange(len(MBTI_TYPES)))
+        ax.set_yticks(np.arange(len(MBTI_TYPES)))
+        ax.set_xticklabels(MBTI_TYPES, rotation=45, ha='right')
+        ax.set_yticklabels(MBTI_TYPES)
+        ax.set_xlabel('Predicted label')
+        ax.set_ylabel('True label')
+        ax.set_title('Top-1 confusion matrix')
+        fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+        fig.tight_layout()
+        fig.savefig(self.output_dir / 'confusion_matrix_top1.png', dpi=160)
+        plt.close(fig)
+
+    def _plot_true_label_rank_distribution(self, per_example: list[dict[str, Any]]) -> None:
+        ranks = [min(int(row['true_label_rank']), 10) for row in per_example]
+        bins = np.arange(1, 12) - 0.5
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.hist(ranks, bins=bins, color='mediumpurple', alpha=0.85, rwidth=0.9)
+        ax.set_xticks(list(range(1, 11)))
+        ax.set_xticklabels(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10+'])
+        ax.set_xlabel('Rank of true label')
+        ax.set_ylabel('Count')
+        ax.set_title('Distribution of the true label rank')
+        fig.tight_layout()
+        fig.savefig(self.output_dir / 'true_label_rank_distribution.png', dpi=160)
+        plt.close(fig)
+
+    def _plot_confidence_vs_entropy_scatter(self, per_example: list[dict[str, Any]]) -> None:
+        x = [row['confidence'] for row in per_example]
+        y = [row['entropy'] for row in per_example]
+        colors = ['tab:green' if row['top_1_correct'] else 'tab:red' for row in per_example]
+        fig, ax = plt.subplots(figsize=(6, 5))
+        ax.scatter(x, y, c=colors, alpha=0.45, s=18)
+        ax.set_xlabel('Top-1 confidence')
+        ax.set_ylabel('Normalized entropy')
+        ax.set_title('Confidence vs entropy')
+        fig.tight_layout()
+        fig.savefig(self.output_dir / 'confidence_vs_entropy_scatter.png', dpi=160)
+        plt.close(fig)
 
     def _maybe_plot_stability(self, metrics: dict[str, Any]) -> None:
         if plt is None or not metrics.get('enabled'):

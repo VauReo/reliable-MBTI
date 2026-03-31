@@ -14,7 +14,7 @@ datasets:
     output_name: pandora.jsonl
 
 preprocessing:
-  max_posts_per_user: 128
+  max_posts_per_user: 50
   max_chars_per_post: 2000
   remove_direct_mbti_mentions: false
   create_cleaned_variant: false

@@ -14,45 +14,48 @@ Or run only evaluation:
 bash manage/run_eval.sh --config configs/eval.yaml
 ```
 
-## Task 6: Candidate Reliability Index (CRI)
+For the full one-command pipeline, including dataset download, split creation, baseline training, and all reliability metrics:
 
-The evaluator computes two CRI variants from normalized uncertainty and stability:
+```bash
+bash manage/run_pipeline.sh --config configs/pipeline.yaml
+```
 
-- Additive: `CRI_add = 1 - (w_u * U + w_s * (1 - S))`
-- Multiplicative: `CRI_mul = (1 - U)^(w_u) * S^(w_s)`
+This single command runs:
 
-`U` is derived from uncertainty signals (entropy and inverse margin).
-`S` is derived from perturbation stability (Task 5), with configurable fallback when stability is unavailable.
+- Kaggle dataset download into `data/raw/kaggle_mbti`
+- preprocessing plus stratified `train/val/test` split creation
+- baseline `TF-IDF + multinomial logistic regression` training
+- ranking metrics plus uncertainty and perturbation-stability auditing
 
-### Weighting strategy
+There is also a small Transformer baseline with a classification head:
 
-- Default mode is `learned` from a fit split of evaluation data.
-- Constraints: `w_u >= 0`, `w_s >= 0`, `w_u + w_s = 1`.
-- Learned weights and diagnostics are saved into `cri_metrics.json`.
+```bash
+bash manage/run_pipeline.sh --config configs/pipeline_transformer.yaml
+```
 
-### CRI effectiveness outputs
+That pipeline uses [`configs/eval_transformer.yaml`](/Users/eneminova/reliable-MBTI/configs/eval_transformer.yaml) and trains a `distilbert-base-uncased` classifier over the same train/val/test splits before running the same ranking and reliability evaluation.
 
-The evaluation writes:
+Important config fields in [`configs/eval.yaml`](/Users/eneminova/reliable-MBTI/configs/eval.yaml):
 
-- `per_example_predictions.jsonl` (includes `cri_additive`, `cri_multiplicative`, `primary_cri`)
-- `cri_metrics.json` (weights, correlations, AUC, bucket analysis)
-- `cri_comparison.png` (holdout comparison across CRI and baselines)
+- `data.train_source` and `data.eval_source`: train/test JSONL paths from preprocessing.
+- `model.source`: `baseline` to fit a local baseline, or `predictions` to audit an existing `predictions.jsonl`.
+- `model.baseline.type`: `tfidf` or `transformer`.
+- `uncertainty.*`: calibration bins and uncertainty bucket count.
+- `stability.*`: perturbation set, evaluated subset size, and top-k definition.
 
-Metrics include Spearman correlation, holdout AUC, and bucketed correctness.
-Comparisons include CRI vs uncertainty-only and stability-only signals.
+Saved artifacts under `output_dir` include:
 
-## Ethics and limitations
+- `metrics_summary.json`
+- `uncertainty_metrics.json`
+- `uncertainty_bucket_analysis.jsonl`
+- `per_example_predictions.jsonl`
+- `stability_metrics.json`
+- `stability_by_perturbation.jsonl`
+- `stability_examples.jsonl`
 
-- Not for hiring decisions.
-- CRI measures reliability of the ranking signal, not candidate quality.
-- MBTI labels are personality descriptors and should not be treated as validated predictors of job performance.
-- Learned CRI weights can overfit on small samples; always report fit/holdout split and diagnostics.
+## Notes
 
-## Mini model card (course version)
-
-- Model family: TF-IDF + multinomial logistic regression ranker.
-- Input: merged MBTI user posts text.
-- Output: ranked MBTI list of 16 classes with probabilities.
-- Reliability layer: uncertainty + perturbation stability + CRI.
-- Intended use: research and Trustworthy AI coursework.
-- Out-of-scope use: automated hiring or employment screening decisions.
+- This is a reproduction scaffold, not a finished implementation.
+- Python entry points live in `src/runners/`.
+- Shell automation lives in `manage/`.
+- Large data, weights, and outputs should stay out of Git.

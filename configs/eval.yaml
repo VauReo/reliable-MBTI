@@ -3,6 +3,7 @@ seed: 42
 
 data:
   train_source: data/splits/kaggle_mbti/train.jsonl
+  val_source: data/splits/kaggle_mbti/val.jsonl
   eval_source: data/splits/kaggle_mbti/test.jsonl
   label_field: label
   text_field: text
@@ -10,6 +11,7 @@ data:
 model:
   source: baseline
   baseline:
+    type: tfidf
     vectorizer:
       max_features: 50000
       min_df: 2

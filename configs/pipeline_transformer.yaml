@@ -1,0 +1,3 @@
+download_config: configs/downloads.yaml
+data_config: configs/data.yaml
+eval_config: configs/eval_transformer.yaml

@@ -8,4 +8,5 @@
 - Run the real download helpers or place data and checkpoints manually.
 - Update config paths in `configs/*.yaml`.
 - Implement dataset preprocessing in `src/dataset/preprocessing.py`.
-- Run the full baseline pipeline with `bash manage/run_pipeline.sh --config configs/pipeline.yaml`.
+- Run the TF-IDF baseline with `bash manage/run_pipeline.sh --config configs/pipeline.yaml`.
+- Run the small Transformer baseline with `bash manage/run_pipeline.sh --config configs/pipeline_transformer.yaml`.

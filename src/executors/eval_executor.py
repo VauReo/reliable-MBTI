@@ -8,6 +8,7 @@ from evaluation.reliability import (
     JsonPredictionScorer,
     ReliabilityEvaluator,
     SklearnRankerScorer,
+    TransformerRankerScorer,
 )
 
 
@@ -38,6 +39,7 @@ class EvaluationExecutor:
         label_field = str(data_cfg.get("label_field", "label"))
         text_field = str(data_cfg.get("text_field", "text"))
         train_source = data_cfg.get("train_source")
+        val_source = data_cfg.get("val_source")
         eval_source = data_cfg.get("eval_source") or self.config.get("label_source")
         if not eval_source:
             raise ValueError(
@@ -78,17 +80,35 @@ class EvaluationExecutor:
                 label_field=label_field,
                 text_field=text_field,
             )
-            scorer = SklearnRankerScorer.from_config(
-                train_dataset,
-                {
-                    **model_cfg.get("baseline", {}),
-                    "seed": self.config.get("seed", 42),
-                },
-            )
+            val_dataset = None
+            if val_source:
+                resolved_val = _resolve_project_path(str(val_source))
+                if resolved_val.exists():
+                    val_dataset = EvaluableDataset.from_jsonl(
+                        val_source,
+                        label_field=label_field,
+                        text_field=text_field,
+                    )
+
+            baseline_cfg = model_cfg.get("baseline", {})
+            baseline_type = str(baseline_cfg.get("type", "tfidf")).strip().lower()
+            scorer_config = {
+                **baseline_cfg,
+                "seed": self.config.get("seed", 42),
+            }
+            if baseline_type == "tfidf":
+                scorer = SklearnRankerScorer.from_config(train_dataset, scorer_config)
+                artifact_path = scorer.save(f"{self.context.output_dir}/baseline_ranker.pkl")
+            elif baseline_type == "transformer":
+                scorer = TransformerRankerScorer.from_config(
+                    train_dataset,
+                    scorer_config,
+                    val_dataset=val_dataset,
+                )
+                artifact_path = scorer.save(f"{self.context.output_dir}/transformer_baseline")
+            else:
+                raise ValueError(f"Unsupported baseline.type={baseline_type!r}")
             scored_rows = scorer.score_texts(eval_dataset.texts())
-            artifact_path = scorer.save(
-                f"{self.context.output_dir}/baseline_ranker.pkl"
-            )
             print(f"[eval] saved baseline ranker to {artifact_path}")
         elif source_kind == "predictions":
             prediction_source = model_cfg.get("prediction_source") or self.config.get(
@@ -127,6 +147,8 @@ class EvaluationExecutor:
         print(f"[eval] top_3_accuracy={summary['top_3_accuracy']:.4f}")
         print(f"[eval] mrr={summary['mrr']:.4f}")
         print(f"[eval] ndcg_at_5={summary['ndcg_at_5']:.4f}")
+        print(f"[eval] macro_f1={summary['macro_f1']:.4f}")
+        print(f"[eval] weighted_f1={summary['weighted_f1']:.4f}")
         print(f"[eval] uncertainty_ece={summary['uncertainty']['ece']:.4f}")
         if summary["stability"].get("enabled"):
             for row in summary["stability"].get("perturbations", []):

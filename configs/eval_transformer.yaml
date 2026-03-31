@@ -1,0 +1,42 @@
+experiment_name: eval_transformer_baseline
+seed: 42
+
+data:
+  train_source: data/splits/kaggle_mbti/train.jsonl
+  val_source: data/splits/kaggle_mbti/val.jsonl
+  eval_source: data/splits/kaggle_mbti/test.jsonl
+  label_field: label
+  text_field: text
+
+model:
+  source: baseline
+  baseline:
+    type: transformer
+    transformer:
+      model_name: distilbert-base-uncased
+      max_length: 256
+      train_batch_size: 8
+      eval_batch_size: 16
+      num_train_epochs: 1
+      learning_rate: 2.0e-5
+      weight_decay: 0.01
+      warmup_ratio: 0.0
+
+uncertainty:
+  enabled: true
+  calibration_bins: 10
+  uncertainty_buckets: 5
+
+stability:
+  enabled: true
+  subset_size: 256
+  top_k: 3
+  save_example_count: 30
+  perturbations:
+    - name: random_deletion
+      delete_ratio: 0.1
+    - name: sentence_shuffle
+    - name: lexical_substitution
+      max_replacements: 12
+
+output_dir: outputs/eval_transformer_baseline
